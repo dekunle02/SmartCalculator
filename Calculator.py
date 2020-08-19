@@ -1,14 +1,5 @@
-# collect the string
-# adjust spacing first
-# check for proper bracketing
-# check for variables and replace where available
-# convert to postfix
-# solve for answer using stack and simple calculate
-# while solving, resolve the ++++ ----
-
 from collections import deque
 
-# Editing to see the push feature
 
 class Calculator:
     operators = ('-', '+', '/', '*', '^')
@@ -30,20 +21,29 @@ class Calculator:
             return
         if user_input[0] == '/' and user_input not in self.commands:
             print(self.error_msg[2])
+            return
         if user_input == '/help':
             print(Calculator.help_msg)
         elif user_input == '/exit':
             print(Calculator.exit_msg)
             self.state = 'OFF'
+        # Process input for calculation
         else:
+            # Check if brackets are properly placed
             if not self.brackets_are_correct(user_input):
                 print(self.error_msg[6])
             else:
-                problem = self.remove_extra_spaces(user_input)
-                problem = self.process_exp_for_variables(problem)
-                if problem is None:
+                # Convert user input string into a list
+                expression = self.process_input_to_list(user_input)
+                # check if = in the expression, so we can save variables
+                if '=' in expression:
+                    self.save_new_variable(expression)
                     return
-                postfix = self.convert_to_postfix(problem)
+                else:
+                    expression = self.process_exp_for_variables(expression)
+                if expression is None:
+                    return
+                postfix = self.convert_to_postfix(expression)
                 if postfix is None:
                     return
                 answer = self.postfix_to_answer(postfix)
@@ -52,8 +52,8 @@ class Calculator:
     @staticmethod
     def calculate(expression):
         num1, operation, num2 = expression.split(" ")
-        num1 = int(num1)
-        num2 = int(num2)
+        num1 = int(float(num1))
+        num2 = int(float(num2))
         if operation == '+':
             return num1 + num2
         elif operation == '-':
@@ -62,13 +62,6 @@ class Calculator:
             return num1 / num2
         elif operation == '*':
             return num1 * num2
-
-    @staticmethod
-    def remove_extra_spaces(string):
-        string_list = string.split()
-        while ' ' in string_list:
-            string_list.remove(' ')
-        return ' '.join(string_list)
 
     @staticmethod
     def brackets_are_correct(expression):
@@ -86,6 +79,35 @@ class Calculator:
         else:
             return False
 
+    @staticmethod
+    def get_stack_elements(stack):
+        answer = ''
+        while len(stack) != 0:
+            answer += stack[0]
+            stack.popleft()
+        return answer
+
+    def process_input_to_list(self, expression):
+        operators = ('-', '+', '/', '*', '^', '=')
+        brackets = ('(', ')')
+        my_deque = deque()
+        answer_list = []
+        for char in [char for char in expression]:
+            if char in brackets:
+                if len(my_deque) != 0:
+                    answer_list.append(self.get_stack_elements(my_deque))
+                answer_list.append(char)
+            else:
+                if len(my_deque) != 0:
+                    if (char not in operators and my_deque[-1] in operators) or (
+                            char in operators and my_deque[-1] not in operators):
+                        answer_list.append(self.get_stack_elements(my_deque))
+                if char != ' ':
+                    my_deque.append(char)
+        if len(my_deque) != 0:
+            answer_list.append(self.get_stack_elements(my_deque))
+        return answer_list
+
     def fetch_variable(self, given_string):
         if given_string.isdigit():
             return given_string
@@ -96,16 +118,12 @@ class Calculator:
         else:
             print(Calculator.error_msg[3])
 
-    def save_new_variable(self, string):
-        string = self.remove_extra_spaces(string)
+    def save_new_variable(self, expression):
         # checking to see if assignment has more than 1 equal sign
-        if string.count('=') > 1:
+        if expression.count('=') > 1:
             print(Calculator.error_msg[5])
             return
-        key, value = string.split('=')
-        key = key.strip()
-        value = value.strip()
-
+        key, value = expression[0], expression[2]
         # checking to see that key contains no numbers
         if not key.isalpha():
             print(Calculator.error_msg[4])
@@ -121,19 +139,14 @@ class Calculator:
 
     def process_exp_for_variables(self, expression):
         # to assignment branch of calculator
-        if '=' in expression:
-            self.save_new_variable(expression)
-            return
-        else:
-            strings = expression.split(" ")
-            for i in range(len(strings)):
-                element = strings[i]
-                if element.isalpha() and element not in self.variables.keys():
-                    print(self.error_msg[3])
-                    return
-                elif element.isalpha() and element in self.variables.keys():
-                    strings[i] = self.variables[i]
-            return ' '.join(strings)
+        for i in range(len(expression)):
+            element = expression[i]
+            if element.isalpha() and element not in self.variables.keys():
+                print(self.error_msg[3])
+                return
+            elif element.isalpha() and element in self.variables.keys():
+                expression[i] = self.variables[expression[i]]
+        return expression
 
     def determine_operator(self, operator):
         if len(operator) == 1:
@@ -159,21 +172,13 @@ class Calculator:
         return new in multi and old in ari
 
     def convert_to_postfix(self, expression):
-        my_deque = deque()
-        my_list = list()
-        operands = expression.split(' ')
-        for i in range(len(operands)):
-            element = operands[i]
+        result = []
+        stack = deque()
+        for element in expression:
             if element.isdigit():
-                my_list.append(element)
-            elif element.startswith('('):
-                my_deque.append('(')
-                my_list.append(element[-1])
-            elif element.endswith(')'):
-                my_list.append(element[0])
-                my_list.append(my_deque[-1])
-                my_deque.pop()
-                my_deque.pop()
+                result.append(element)
+            elif element == '(':
+                stack.append(element)
             else:
                 if element.count('*') > 1 or element.count('/') > 1:
                     print(self.error_msg[6])
@@ -182,30 +187,34 @@ class Calculator:
                     int(element)
                 except ValueError:
                     element = self.determine_operator(element)
-                if len(my_deque) == 0:
-                    my_deque.append(element)
+                if len(stack) == 0 or stack[-1] == '(':
+                    stack.append(element)
+                elif element == ')':
+                    while stack[-1] != '(':
+                        result.append(stack[-1])
+                        stack.pop()
+                    stack.pop()
                 else:
-                    if Calculator.has_priority(new=element, old=my_deque[-1]):
-                        my_deque.append(element)
+                    if self.has_priority(element, stack[-1]):
+                        stack.append(element)
                     else:
-                        my_deque.reverse()
-                        my_list.extend(my_deque)
-                        my_deque.clear()
-                        my_deque.append(element)
-            if i == len(operands) - 1:
-                if len(my_deque) != 0:
-                    my_deque.reverse()
-                    my_list.extend(my_deque)
-        return " ".join(my_list)
+                        while len(stack) != 0 and (stack[-1] != '(' or self.has_priority(stack[-1], element)):
+                            result.append(stack[-1])
+                            stack.pop()
+                        stack.append(element)
+        while len(stack) != 0:
+            result.append(stack[-1])
+            stack.pop()
+        return result
 
     @staticmethod
     def postfix_to_answer(expression):
         if expression is None:
             return
-        operands = expression.split()
+        if len(expression) == 2:
+            return int(expression[1] + expression[0])
         my_deque = deque()
-        current_answer = 0
-        for element in operands:
+        for element in expression:
             if element not in Calculator.operators:
                 my_deque.append(element)
             else:
@@ -220,18 +229,24 @@ class Calculator:
         return current_answer
 
 
-cal = Calculator()
-while cal.state != 'OFF':
-    cal.run('8 * 3 + 12 * (4 - 2)')
-    cal.run('2 - 2 + 3')
-    cal.run('4 * (2 + 3')
-    cal.run('-10')
-    cal.run('a=4')
-    cal.run('b=5')
-    cal.run('c=6')
-    # cal.run('a*2+b*3+c*(2+3)')
-    # cal.run('1 +++ 2 * 3 -- 4')
-    # cal.run('3 *** 5')
-    # cal.run('4+3)')
-    # cal.run('/command')
-    cal.run('/exit')
+if __name__ == '__main__':
+    cal = Calculator()
+    while cal.state != 'OFF':
+        cal.run(input())
+
+# cal = Calculator()
+# while cal.state != 'OFF':
+#     cal.run('8 * 3 + 12 * (4 - 2)')
+#     cal.run('2 - 2 + 3')
+#     cal.run('4 * (2 + 3')
+#     cal.run('-10')
+#     cal.run('a=4')
+#     cal.run('b=5')
+#     cal.run('c=6')
+#     cal.run('a * 2 + b * 3 + c * (2 + 3)')
+#     cal.run('1 +++ 2 * 3 -- 4')
+#     cal.run('3 *** 5')
+#     cal.run('4+3)')
+#     cal.run('3 + 8 * ((4 + 3) * 2 + 1) - 6 / (2 + 1)')
+#     cal.run('/command')
+#     cal.run('/exit')
